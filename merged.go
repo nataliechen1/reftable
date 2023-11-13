@@ -113,16 +113,11 @@ func (m *Merged) HashID() HashID {
 
 // NewMerged creates a reader for a merged reftable.
 func NewMerged(tabs []Table, hashID [4]byte) (*Merged, error) {
-	var last Table
 	for i, t := range tabs {
-		if last != nil && last.MaxUpdateIndex() >= t.MinUpdateIndex() {
-			return nil, fmt.Errorf("reftable: table %d has min %d, table %d has max %d; indices must be increasing.", i, t.MinUpdateIndex(), i-1, last.MaxUpdateIndex())
-		}
 		if t.HashID() != hashID {
 			return nil, fmt.Errorf("reftable: table %d has hash ID %q want hash ID %q", i,
 				t.HashID(), hashID)
 		}
-		last = t
 	}
 
 	return &Merged{
@@ -133,12 +128,30 @@ func NewMerged(tabs []Table, hashID [4]byte) (*Merged, error) {
 
 // MaxUpdateIndex implements the Table interface.
 func (m *Merged) MaxUpdateIndex() uint64 {
-	return m.stack[len(m.stack)].MaxUpdateIndex()
+	if len(m.stack) == 0 {
+		return 0
+	}
+	maxUpdateIndex := m.stack[len(m.stack) - 1].MaxUpdateIndex()
+	for i := len(m.stack) - 2; i >= 0; i-- {
+		if maxUpdateIndex < m.stack[i].MaxUpdateIndex() {
+			maxUpdateIndex = m.stack[i].MaxUpdateIndex()
+		}
+	}
+	return maxUpdateIndex
 }
 
 // MinUpdateIndex implements the Table interface.
 func (m *Merged) MinUpdateIndex() uint64 {
-	return m.stack[0].MinUpdateIndex()
+	if len(m.stack) == 0 {
+		return 0
+	}
+	minUpdateIndex := m.stack[0].MinUpdateIndex()
+	for i := 1; i < len(m.stack); i ++ {
+		if minUpdateIndex > m.stack[i].MinUpdateIndex() {
+			minUpdateIndex =  m.stack[i].MinUpdateIndex()
+		}
+	}
+	return minUpdateIndex
 }
 
 // RefsFor returns the refs that point to the given oid
